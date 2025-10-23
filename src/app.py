@@ -10,12 +10,14 @@ from api.models import db, User
 from api.routes import api
 from api.admin import setup_admin
 from api.commands import setup_commands
-
+#from datetime import timedelta
+#------import datetime para los refresh
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import get_jwt_identity
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
-
+#from flask_jwt_extended import create_refresh_token
+#------import refresh------
 
 # from models import Person
 
@@ -26,6 +28,16 @@ app = Flask(__name__)
 app.url_map.strict_slashes = False
 
 app.config["JWT_SECRET_KEY"] = os.getenv('JWT_KEY')
+
+#ACCESS_MIN = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_MIN", "60"))
+#REFRESH_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_DAYS", "30"))
+#----------------------------------------------
+#    Pruevas para los refrsh tokens /\  \/
+#--------------------------------------------------
+#app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=ACCESS_MIN)
+#app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=REFRESH_DAYS)
+
+
 jwt = JWTManager(app)
 
 # database condiguration
@@ -100,18 +112,26 @@ def login():
         return jsonify({'msg': 'Usuario o contraseña incorrecta'}), 400 
     
     acces_token = create_access_token(identity=user.email)
+    #refresh_token = create_refresh_token(identity=user.email)
+    #-----refresh token
     #print(user)
     return jsonify({'msg': 'Usuario logeado correctamente!', \
                     'token': acces_token}), 200
+                    #'refresh_token': refresh_token,-------
+                    #'access_expires_minutes': ACCESS_MIN,------SOLO PRUEBAS REFRESH
+                    #'refresh_expires_days': REFRESH_DAYS}), 200 ------
 
-
+#-----ENDPOINTS PROTEGIDOS \/ 
 @app.route('/private', methods=['GET'])
 @jwt_required()
 def privado():
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
-    
-    return jsonify({"id": user.email, "username": user.username }), 200
+    current_user = get_jwt_identity()
+    #print(current_user)
+    user = User.query.filter_by(email=current_user).first
+    #----Para autorizar por primera vez un token en Postman /headers -> //crear key// -> Authorization y //Value -> Bearer (espacio) nuevo token
+    #---Una vez autorizado -> /Authorization/Bearer Token/ poner el token
+    return jsonify({'msg': 'Gracias por probar que estas logeado'}), 200
+    #return jsonify({"id": user.email, "username": user.username }), 200
 
 # this only runs if `$ python src/main.py` is executed
 if __name__ == '__main__':
