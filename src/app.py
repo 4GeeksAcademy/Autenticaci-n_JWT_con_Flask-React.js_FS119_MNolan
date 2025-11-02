@@ -16,6 +16,10 @@ from flask_jwt_extended import create_access_token
 from flask_jwt_extended import get_jwt_identity
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import JWTManager
+#   Al importar Bcrypt se tiene que instalar la libreria con el comando \
+#   : $ pip("pipenv" en este repo) install flask-bcrypt
+from flask_bcrypt import Bcrypt
+
 #from flask_jwt_extended import create_refresh_token
 #------import refresh------
 
@@ -28,6 +32,8 @@ app = Flask(__name__)
 app.url_map.strict_slashes = False
 
 app.config["JWT_SECRET_KEY"] = os.getenv('JWT_KEY')
+
+bcrypt = Bcrypt(app) 
 
 #ACCESS_MIN = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_MIN", "60"))
 #REFRESH_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_DAYS", "30"))
@@ -88,7 +94,8 @@ def serve_any_other_file(path):
 
 
 
-@app.route('/login', methods=['POST'])
+
+@app.route('/api/login', methods=['POST'])
 def login():
     body = request.get_json(silent=True)
     if body is None:
@@ -108,8 +115,11 @@ def login():
     print(user)
     if user is None:
         return jsonify({'msg': 'Usuario o contraseña incorrecta'}), 400
-    if user.password != body['password']:
-        return jsonify({'msg': 'Usuario o contraseña incorrecta'}), 400 
+    is_correct = bcrypt.check_password_hash(user.password, body['password'])
+    if is_correct == False:
+        return jsonify({'msg': 'Usuario o contraseña incorrecta'}), 400
+    #if user.password != body['password']:
+    #    return jsonify({'msg': 'Usuario o contraseña incorrecta'}), 400 
     
     acces_token = create_access_token(identity=user.email)
     #refresh_token = create_refresh_token(identity=user.email)
@@ -121,13 +131,43 @@ def login():
                     #'access_expires_minutes': ACCESS_MIN,------SOLO PRUEBAS REFRESH
                     #'refresh_expires_days': REFRESH_DAYS}), 200 ------
 
+
+@app.route('/api/register', methods=['POST'])
+def register_user():
+    body = request.get_json(silent=True)
+    if body is None:
+        return jsonify({'msg': 'Debes enviar informacion en el body'}), 400
+    if 'email' not in body:
+        return jsonify({'msg': 'El campo email es obligatorio'}), 400
+    if 'name' not in body:
+        return  jsonify({'msg': 'Debes proporcionar un nombre'}), 400
+    if 'password' not in body:
+        return jsonify({'msg': 'Debes proporcionar una contraseña'}), 400
+    
+    new_register = User() # Otra opcion seria instanciar todo el body dentro del User \
+    # asi:  new_register = User( email = body['email], name = body['name]...) \
+    # En este casa lo instanciamos por separado
+    new_register.name = body['name']
+    new_register.email = body['email']
+    hash_password = bcrypt.generate_password_hash(body['password']).decode('utf-8')
+    #new_register.password = body['password']
+    new_register.password = hash_password
+
+    new_register.is_active = True
+    
+    db.session.add(new_register)
+    db.session.commit()
+
+    return jsonify({'msg': 'Usuario registrado!', 'register': new_register.serialize()}), 200
+
+
 #-----ENDPOINTS PROTEGIDOS \/ 
-@app.route('/private', methods=['GET'])
+@app.route('/api/private', methods=['GET'])
 @jwt_required()
 def privado():
     current_user = get_jwt_identity()
     #print(current_user)
-    user = User.query.filter_by(email=current_user).first
+    current_user = User.query.filter_by(email=current_user).first
     #----Para autorizar por primera vez un token en Postman /headers -> //crear key// -> Authorization y //Value -> Bearer (espacio) nuevo token
     #---Una vez autorizado -> /Authorization/Bearer Token/ poner el token
     return jsonify({'msg': 'Gracias por probar que estas logeado'}), 200
