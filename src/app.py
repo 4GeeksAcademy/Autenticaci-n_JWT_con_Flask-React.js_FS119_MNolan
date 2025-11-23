@@ -10,6 +10,7 @@ from api.models import db, User
 from api.routes import api
 from api.admin import setup_admin
 from api.commands import setup_commands
+from flask_cors import CORS
 #from datetime import timedelta
 #------import datetime para los refresh
 from flask_jwt_extended import create_access_token
@@ -19,7 +20,7 @@ from flask_jwt_extended import JWTManager
 #   Al importar Bcrypt se tiene que instalar la libreria con el comando \
 #   : $ pip("pipenv" en este repo) install flask-bcrypt
 from flask_bcrypt import Bcrypt
-
+from sqlalchemy.exc import IntegrityError
 #from flask_jwt_extended import create_refresh_token
 #------import refresh------
 
@@ -34,6 +35,8 @@ app.url_map.strict_slashes = False
 app.config["JWT_SECRET_KEY"] = os.getenv('JWT_KEY')
 
 bcrypt = Bcrypt(app) 
+
+CORS(app)
 
 #ACCESS_MIN = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_MIN", "60"))
 #REFRESH_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES_DAYS", "30"))
@@ -145,8 +148,8 @@ def register_user():
         return jsonify({'msg': 'Debes proporcionar una contraseña'}), 400
     
     new_register = User() # Otra opcion seria instanciar todo el body dentro del User \
-    # asi:  new_register = User( email = body['email], name = body['name]...) \
-    # En este casa lo instanciamos por separado
+    # así:  new_register = User( email = body['email], name = body['name]...) \
+    # En este caso lo instanciamos por separado
     new_register.name = body['name']
     new_register.email = body['email']
     hash_password = bcrypt.generate_password_hash(body['password']).decode('utf-8')
@@ -155,8 +158,14 @@ def register_user():
 
     new_register.is_active = True
     
-    db.session.add(new_register)
-    db.session.commit()
+    try:
+        db.session.add(new_register)
+        db.session.commit()
+
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'msg': 'Ya existe un usuario con ese email'}), 400
+
 
     return jsonify({'msg': 'Usuario registrado!', 'register': new_register.serialize()}), 200
 
@@ -165,13 +174,17 @@ def register_user():
 @app.route('/api/private', methods=['GET'])
 @jwt_required()
 def privado():
-    current_user = get_jwt_identity()
+    current_user_email = get_jwt_identity()
     #print(current_user)
-    current_user = User.query.filter_by(email=current_user).first
+    current_user = User.query.filter_by(email=current_user_email).first() 
     #----Para autorizar por primera vez un token en Postman /headers -> //crear key// -> Authorization y //Value -> Bearer (espacio) nuevo token
     #---Una vez autorizado -> /Authorization/Bearer Token/ poner el token
-    return jsonify({'msg': 'Gracias por probar que estas logeado'}), 200
-    #return jsonify({"id": user.email, "username": user.username }), 200
+    if current_user is None:
+        return jsonify({'msg': 'Usuario no encontrado'}), 404
+    
+    return jsonify({
+        'msg': 'Gracias por probar que estas logeado', 
+        'name': current_user.name}), 200
 
 # this only runs if `$ python src/main.py` is executed
 if __name__ == '__main__':
