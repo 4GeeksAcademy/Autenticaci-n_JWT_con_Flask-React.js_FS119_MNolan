@@ -73,6 +73,7 @@ dist/*
 !.eslintrc
 !.env.example
 .now
+migrations/
 
 # backend stuff
 .venv

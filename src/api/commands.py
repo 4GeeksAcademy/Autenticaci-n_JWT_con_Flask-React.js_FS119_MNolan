@@ -11,7 +11,7 @@ def setup_commands(app):
     
     """ 
     This is an example command "insert-test-users" that you can run from the command line
-    by typing: $ flask insert-test-users 5
+    by typing: $ pipenv run flask insert-test-users 5 ---numero de tablas que quieras crear
     Note: 5 is the number of users to add
     """
     @app.cli.command("insert-test-users") # name of our command
